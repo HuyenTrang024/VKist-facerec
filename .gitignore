@@ -51,7 +51,7 @@ backend/instance/
 
 # ── Docker storage (images/containers) ────────────────────────────────────────
 docker-data/
-face-system/data/
+data/
 
 # ── Notebooks ─────────────────────────────────────────────────────────────────
 .ipynb_checkpoints/
@@ -59,7 +59,7 @@ face-system/data/
 # ── IDE / tooling ─────────────────────────────────────────────────────────────
 .vscode/
 .claude/
-# ── face-system runtime data ──────────────────────────────────────────────────
+# ── Runtime data (ảnh, index, DB) ──────────────────────────────────────────────────
 **/backend/images/
 **/backend/indexes/
 **/backend/instance/

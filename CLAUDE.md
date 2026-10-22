@@ -1,4 +1,4 @@
-# CLAUDE.md – face-system (VKIST Face Recognition, bản Docker)
+# CLAUDE.md – VKist-facerec (VKIST Face Recognition, bản Docker)
 
 ## Tổng quan
 
@@ -30,7 +30,13 @@ Claude không có quyền gọi Docker trong phiên làm việc.
 - `.env`: `SECRET_KEY` (chỉ frontend dùng, lấy từ trang `:5002` sau khi đăng ký), `RTSP_URLS` (phân tách bằng dấu phẩy), `REQUEST_INTERVAL`.
 - Backend **không** đọc `SECRET_KEY` từ env; key là UUID sinh khi đăng ký tài khoản.
 - Dữ liệu bind mount: `data/instance` (SQLite `face_reg.db`), `data/indexes`, `data/images`. Volume `model_cache` → `/root/.cache`.
-- Weights không có trong Git: `weights-backend.zip` → `backend/`, `weights-frontend.zip` → `frontend/` (bản zip nằm ở `../`).
+- Weights không có trong Git: `weights-backend.zip` → `backend/`, `weights-frontend.zip` → `frontend/` (bản zip nằm ở thư mục gốc repo).
+
+## Cấu trúc repo
+
+- `backend/`, `frontend/`, `docker-compose.yml`, `data/` (runtime, không commit), `tests/` (script thử nghiệm Polyface 2022).
+- Remote `mine` = `github.com/HuyenTrang024/VKist-facerec` (public, nhánh `main` theo dõi remote này); `origin` = repo gốc `itvkist/vkist-facerec`.
+- Ngày 2026-10-22: đưa nội dung `face-system/` lên thư mục gốc, đổi `test_polyface/` → `tests/`, gộp README.
 
 ## Lưu ý kỹ thuật
 
@@ -48,7 +54,7 @@ Claude không có quyền gọi Docker trong phiên làm việc.
 - `frontend/app.py`: thêm route `POST /facereg` proxy sang `BACKEND_URL/facereg`.
 - `frontend/templates/index.html`: `BACKEND_URL` từ `"http://localhost:5002"` → `""` (gọi `/facereg` cùng origin). Sửa lỗi đăng ký khuôn mặt từ máy khác (localhost) và CORS.
 - `README.md`: hiện là **hướng dẫn ngắn cho người dùng** (truy cập LAN / Tailscale). Bản README dài cho quản trị (vận hành máy chủ, Portainer, cài mới từ đầu) đã bị xóa khỏi đĩa, có thể viết lại thành `HUONG_DAN_QUAN_TRI.md` nếu cần.
-- `../.gitignore`: thêm `docker-data/`, `face-system/data/`.
+- `.gitignore`: thêm `docker-data/`, `data/`.
 
 ### Trạng thái cuối ngày (chưa xong)
 - Build backend mới **thất bại**: `no space left on device` khi giải nén image CUDA devel vào `/var/lib/containerd`.

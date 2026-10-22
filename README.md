@@ -1,162 +1,89 @@
-# vkist-facerec
-VKIST Face Recognition System
+# VKist-facerec
 
-## Clone the repository
+Hệ thống điểm danh bằng khuôn mặt của VKIST. Hệ thống nhận diện được cả khi người dùng đeo khẩu trang, đeo kính hoặc quay mặt nghiêng.
 
-```bash
-git clone https://github.com/itvkist/vkist-facerec.git
-cd vkist-facerec
+| Thành phần | Cổng | Công nghệ | Chức năng |
+|---|---|---|---|
+| `backend` | 5002 | aiohttp, PyTorch, SQLite, hnswlib | Nhận diện (RFB detector, ArcFace, Deep3D bỏ khẩu trang, DREAM), trang quản trị |
+| `frontend` | 5000 | Flask, TensorFlow Lite | Đọc webcam/camera RTSP, phát hiện khuôn mặt, gửi sang backend |
+
+## Cấu trúc thư mục
+
+```
+VKist-facerec/
+├── backend/
+│   ├── app/                # ArcFace, RFB face detector, phân loại phụ kiện
+│   ├── deep3d/             # Tái tạo 3D, bỏ khẩu trang
+│   ├── face_dream/         # DREAM – hiệu chỉnh embedding theo góc mặt
+│   ├── static/, templates/ # Giao diện trang quản trị
+│   ├── app.py              # Server backend
+│   ├── create_app.py       # Model CSDL
+│   ├── export_data.py      # Xuất điểm danh ra Excel theo tháng
+│   └── Dockerfile
+├── frontend/
+│   ├── utils/              # Detector, alignment TFLite và công cụ chuyển đổi model
+│   ├── templates/          # Màn hình camera
+│   ├── app.py              # Server frontend (1 camera)
+│   ├── app_multi.py        # Bản nhiều camera
+│   └── Dockerfile
+├── tests/                  # Script thử nghiệm (Polyface, khẩu trang, kính, ánh sáng yếu...)
+├── data/                   # Dữ liệu chạy: DB, index, ảnh (không commit)
+└── docker-compose.yml
 ```
 
-## Download weights
+## Cài đặt
 
-Download from Google Drive (faster) or GitHub Releases:
+**Yêu cầu:** Linux, GPU NVIDIA, Docker và [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
 
-- Google Drive: https://drive.google.com/drive/folders/1Nb4V75i_BX00RT0HQNAIcgsKmYLQpn9p?usp=sharing
-- GitHub Releases: https://github.com/itvkist/vkist-facerec/releases/tag/v1.0.0
+**1. Tải code và weights**
 
-Extract each archive into its respective folder:
+```bash
+git clone https://github.com/HuyenTrang024/VKist-facerec.git
+cd VKist-facerec
+```
+
+Tải `weights-backend.zip` và `weights-frontend.zip` từ [Google Drive](https://drive.google.com/drive/folders/1Nb4V75i_BX00RT0HQNAIcgsKmYLQpn9p?usp=sharing), rồi giải nén:
 
 ```bash
 unzip weights-backend.zip -d backend/
 unzip weights-frontend.zip -d frontend/
 ```
 
----
+**2. Tạo file `.env`**
 
-## File structure
-
-```
-vkist-facerec/
-|
-|-- backend/
-|    |-- app/
-|    |    |-- accessories_classification/
-|    |    |    |-- shuffle0_0_epoch_47.pth          # Accessories classifier weights
-|    |    |
-|    |    |-- arcface/
-|    |    |    |-- ms1mv3_arcface_r50_fp16/
-|    |    |    |    |-- backbone_ir50_ms1m_epoch120.pth  # ArcFace backbone weights
-|    |    |    |-- backbone.py                      # ArcFace model definition
-|    |    |
-|    |    |-- vision/
-|    |    |    |-- detect_RFB_640/
-|    |    |    |    |-- version-RFB-640.pth         # Face detector weights
-|    |    |    |    |-- voc-model-labels.txt        # Face detector labels
-|    |    |    |-- <model source files>             # SSD/RFB detector source
-|    |    |
-|    |    |-- __init__.py
-|    |
-|    |-- deep3d/
-|    |    |-- BFM/                                  # Basel Face Model data files
-|    |    |-- checkpoints/                          # Deep3D model weights
-|    |    |-- models/                               # 3D reconstruction model definitions
-|    |    |-- options/                              # Training/test option parsers
-|    |    |-- util/                                 # Preprocessing and visualization utilities
-|    |    |-- masked-face.jpg                       # Test input for test_deep3d.py
-|    |    |-- unmasked-face.jpg                     # Test output from test_deep3d.py
-|    |
-|    |-- face_dream/
-|    |    |-- dream.py                              # DREAM pose-invariant embedding correction
-|    |    |-- checkpoint_512.pth                    # DREAM model weights
-|    |
-|    |-- static/                                    # CSS, JS, and image assets
-|    |-- templates/                                 # Jinja2 HTML templates
-|    |-- images/                                    # Captured face images (runtime)
-|    |-- indexes/                                   # hnswlib index files (runtime)
-|    |-- instance/                                  # SQLite database (runtime)
-|    |
-|    |-- app.py                                     # Main backend server (aiohttp, port 5002)
-|    |-- create_app.py                              # Database models and app factory
-|    |-- test_deep3d.py                             # Test the Deep3D mask-removal pipeline
-|    |-- export_data.py                             # Export attendance records to Excel by month
-|    |-- requirements.txt
-|
-|-- frontend/
-|    |-- utils/
-|    |    |-- service/
-|    |    |    |-- weights/                         # TFLite model weights
-|    |    |    |-- TFLiteFaceDetector.py            # Lightweight face detector (TFLite)
-|    |    |    |-- TFLiteFaceAlignment.py           # Face alignment model (TFLite)
-|    |    |-- functions.py                          # Shared utility functions
-|    |
-|    |-- static/                                    # CSS, JS, and image assets
-|    |-- templates/
-|    |    |-- index.html                            # Main attendance monitoring page
-|    |
-|    |-- app.py                                     # Frontend streaming server (Flask, port 5000)
-|    |-- requirements.txt
+```env
+SECRET_KEY=           # lấy ở trang quản trị sau khi đăng ký tài khoản
+RTSP_URLS=            # camera IP, cách nhau bằng dấu phẩy; để trống nếu dùng webcam
+REQUEST_INTERVAL=15
 ```
 
----
-
-## Backend
-
-### Setup
+**3. Chạy**
 
 ```bash
-cd backend
-conda create -n vkist-facerec-backend python=3.10
-conda activate vkist-facerec-backend
-pip install -r requirements.txt
-pip install git+https://github.com/NVlabs/nvdiffrast.git --no-build-isolation
+docker compose up -d --build
+docker compose logs -f backend
 ```
 
-> nvdiffrast requires Microsoft Visual C++ Build Tools on Windows.
+Lần chạy đầu sẽ chậm, vì nvdiffrast phải biên dịch CUDA.
 
-### Verify Deep3D
+**4. Lần đầu sử dụng**
 
-Before running the backend, verify that the mask-removal pipeline works correctly:
+1. Mở `http://localhost:5002`, đăng ký tài khoản và lấy secret key.
+2. Điền secret key vào `SECRET_KEY` trong `.env`.
+3. Chạy `docker compose up -d` để khởi động lại.
 
-```bash
-python test_deep3d.py
-```
+## Sử dụng
 
-This reads `deep3d/masked-face.jpg` and writes the result to `deep3d/unmasked-face.jpg`.
+| Trang | Địa chỉ |
+|---|---|
+| Màn hình camera, đăng ký khuôn mặt | `http://<ip-máy-chủ>:5000` |
+| Trang quản trị: tài khoản, nhân sự, lịch sử điểm danh | `http://<ip-máy-chủ>:5002` |
 
-### Run
+Máy khác trong cùng mạng LAN chỉ cần mở trình duyệt. Muốn truy cập từ ngoài mạng thì dùng [Tailscale](https://tailscale.com/download).
 
-```bash
-python app.py
-```
-
-Access the backend at: http://localhost:5002
-
-> To use the system, open the backend, create a user account on the registration page, and note down your secret key. Authentication is required to access all private pages.
-
----
-
-## Frontend
-
-### Setup
+Xuất dữ liệu điểm danh ra Excel:
 
 ```bash
-cd frontend
-conda create -n vkist-facerec-frontend python=3.10
-conda activate vkist-facerec-frontend
-pip install -r requirements.txt
-```
-
-### Configure
-
-Open `frontend/app.py` and replace the `SECRET_KEY` value with the secret key from your backend account. Add any RTSP camera URLs to `RTSP_URLS` if needed — webcams are detected automatically.
-
-### Run
-
-```bash
-python app.py
-```
-
-Access the frontend at: http://localhost:5000
-
----
-
-## Export data
-
-To export monthly attendance records to an Excel spreadsheet:
-
-```bash
-cd backend
-pip install pandas openpyxl
-python export_data.py
+docker compose exec backend sh -c "pip install pandas openpyxl && python export_data.py"
+docker compose cp backend:/app/exported_timeline_monthly.xlsx .
 ```
