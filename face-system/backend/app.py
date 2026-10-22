@@ -365,42 +365,81 @@ login_app = LoginApp()
 @aiohttp_jinja2.template('index.html')
 @login_app.login_required
 async def index(current_user, request):
-    data = await request.post()
+    error_msg = None
+    success_msg = None
+    mode = 'login'          # 'login' hoặc 'register'
+    form = {}
 
-    if 'login' in data and request.method == 'POST':
-        username = data.get('username')
-        password = data.get('password')
-        user = Users.query.filter_by(username=username).first()
-        if user and verify_pass(password, user.password):
-            return login_app.login_user(user, request)
-        raise web.HTTPFound(location='./')
+    if request.method == 'GET' and request.query.get('registered'):
+        success_msg = "Đăng ký thành công! Vui lòng đăng nhập."
 
-    if 'register' in data and request.method == 'POST':
-        username = data.get('username')
-        password = data.get('password')
-        if username.strip() == "" or password.strip() == "":
-            raise web.HTTPFound(location='./')
-        if Users.query.filter_by(username=username).first():
-            raise web.HTTPFound(location='./')
-        user = Users(username=username, password=password, secret_key="")
-        db_session.add(user)
-        db_session.commit()
-        p = hnswlib.Index(space='cosine', dim=512)
-        p.init_index(max_elements=1000, ef_construction=200, M=16)
-        p.set_ef(10)
-        p.set_num_threads(4)
-        p.save_index("indexes/index_" + str(user.secret_key) + ".bin")
-        return login_app.login_user(user, request)
+    if request.method == 'POST':
+        data = await request.post()
 
+        # ── ĐĂNG NHẬP ──
+        if 'login' in data:
+            username = data.get('username', '').strip()
+            password = data.get('password', '')
+            form = {'username': username}
+            user = Users.query.filter_by(username=username).first()
+            if not user:
+                error_msg = "Tài khoản này hiện chưa có. Vui lòng bấm 'Đăng ký' để tạo tài khoản mới."
+            elif not verify_pass(password, user.password):
+                error_msg = "Mật khẩu không chính xác!"
+            else:
+                return login_app.login_user(user, request)
+
+        # ── ĐĂNG KÝ ──
+        elif 'register' in data:
+            mode = 'register'
+            full_name = data.get('full_name', '').strip()
+            username = data.get('username', '').strip()
+            password = data.get('password', '')
+            confirm_password = data.get('confirm_password', '')
+            form = {'full_name': full_name, 'username': username}
+
+            if not full_name or not username or not password:
+                error_msg = "Vui lòng nhập đầy đủ họ tên, tên đăng nhập và mật khẩu!"
+            elif password != confirm_password:
+                error_msg = "Mật khẩu nhập lại không khớp!"
+            elif Users.query.filter_by(username=username).first():
+                error_msg = "Tên đăng nhập đã tồn tại!"
+            else:
+                new_secret_key = str(uuid.uuid4())
+                user = Users(username=username, password=password,
+                             secret_key=new_secret_key, full_name=full_name)
+                db_session.add(user)
+                db_session.commit()
+
+                # Khởi tạo vector index cho tài khoản mới
+                os.makedirs("indexes", exist_ok=True)
+                p = hnswlib.Index(space='cosine', dim=512)
+                p.init_index(max_elements=1000, ef_construction=200, M=16)
+                p.set_ef(10)
+                p.set_num_threads(4)
+                p.save_index(f"indexes/index_{user.secret_key}.bin")
+
+                # Đăng ký xong -> quay về trang đăng nhập, KHÔNG tự đăng nhập
+                return web.HTTPSeeOther(location='./?registered=1')
+
+    # ── CHƯA ĐĂNG NHẬP: chỉ hiện trang login ──
     if not current_user:
-        return {'is_login': False, 'current_user': None}
-    return {'is_login': True, 'current_user': current_user}
+        return aiohttp_jinja2.render_template('login.html', request, {
+            'error': error_msg, 'success': success_msg, 'mode': mode, 'form': form
+        })
+
+    # ── ĐÃ ĐĂNG NHẬP ──
+    user_db = Users.query.filter_by(id=current_user['id']).first()
+    return {'is_login': True, 'current_user': user_db}
 
 
 @aiohttp_jinja2.template('client.html')
 @login_app.login_required
 async def client_a(current_user, request):
+    if not current_user:
+        return web.HTTPFound('./')      # dùng return, KHÔNG dùng raise
     return {'current_user': current_user}
+
 
 
 async def logout(request):
@@ -1095,13 +1134,13 @@ def create_error_middleware(overrides):
 
 
 async def handle_403(request, ex):
-    raise web.HTTPFound(location='./')
+    return web.HTTPFound(location='./')
 
 async def handle_404(request, ex):
-    raise web.HTTPFound(location='./')
+    return web.HTTPFound(location='./')
 
 async def handle_500(request, ex):
-    raise web.HTTPFound(location='./')
+    return web.HTTPFound(location='./')
 
 
 app.middlewares.append(create_error_middleware({

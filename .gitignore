@@ -49,9 +49,18 @@ backend/indexes/
 backend/instance/
 *.db
 
+# ── Docker storage (images/containers) ────────────────────────────────────────
+docker-data/
+face-system/data/
+
 # ── Notebooks ─────────────────────────────────────────────────────────────────
 .ipynb_checkpoints/
 
 # ── IDE / tooling ─────────────────────────────────────────────────────────────
 .vscode/
 .claude/
+# ── face-system runtime data ──────────────────────────────────────────────────
+**/backend/images/
+**/backend/indexes/
+**/backend/instance/
+miniconda.sh

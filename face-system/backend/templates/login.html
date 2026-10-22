@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Đăng nhập - Quản lý điểm danh</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="icon" type="image/icon" href="./static/img/icon.png">
+  <style>
+    body { background: #f0f2f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .auth-card { width: 100%; max-width: 440px; border: 0; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,.1); }
+  </style>
+</head>
+<body>
+  <div class="card auth-card p-4 m-3">
+    <h4 class="text-center mb-1">Quản Lý Điểm Danh</h4>
+    <p class="text-center text-muted mb-3" id="subtitle">Đăng nhập để tiếp tục</p>
+
+    {% if error %}
+    <div class="alert alert-danger py-2">{{ error }}</div>
+    {% endif %}
+    {% if success %}
+    <div class="alert alert-success py-2">{{ success }}</div>
+    {% endif %}
+
+    <!-- ĐĂNG NHẬP -->
+    <form id="loginForm" method="post" action="./" style="display: {{ 'none' if mode == 'register' else 'block' }};">
+      <input type="hidden" name="login" value="1">
+      <div class="mb-3">
+        <label class="form-label">Tên đăng nhập</label>
+        <input type="text" name="username" class="form-control" value="{{ form.username or '' }}" required autofocus>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Mật khẩu</label>
+        <input type="password" name="password" class="form-control" required>
+      </div>
+      <button type="submit" class="btn btn-primary w-100">Đăng nhập</button>
+      <div class="text-center mt-3">
+        Chưa có tài khoản? <a href="#" onclick="switchView('register'); return false;">Đăng ký</a>
+      </div>
+    </form>
+
+    <!-- ĐĂNG KÝ -->
+    <form id="registerForm" method="post" action="./" onsubmit="return validateRegister()" style="display: {{ 'block' if mode == 'register' else 'none' }};">
+      <input type="hidden" name="register" value="1">
+      <div class="mb-3">
+        <label class="form-label">Họ và tên</label>
+        <input type="text" name="full_name" class="form-control" value="{{ form.full_name or '' }}" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Tên đăng nhập</label>
+        <input type="text" name="username" class="form-control" value="{{ form.username or '' }}" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Mật khẩu</label>
+        <input type="password" id="reg-password" name="password" class="form-control" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Nhập lại mật khẩu</label>
+        <input type="password" id="reg-confirm" name="confirm_password" class="form-control" required>
+        <div class="text-danger small mt-1" id="pw-error" style="display:none;">Mật khẩu nhập lại không khớp!</div>
+      </div>
+      <button type="submit" class="btn btn-success w-100">Xác nhận đăng ký</button>
+      <div class="text-center mt-3">
+        Đã có tài khoản? <a href="#" onclick="switchView('login'); return false;">Quay lại đăng nhập</a>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    function switchView(view) {
+      var isReg = view === 'register';
+      document.getElementById('loginForm').style.display = isReg ? 'none' : 'block';
+      document.getElementById('registerForm').style.display = isReg ? 'block' : 'none';
+      document.getElementById('subtitle').innerText = isReg ? 'Tạo tài khoản mới' : 'Đăng nhập để tiếp tục';
+    }
+    function validateRegister() {
+      var ok = document.getElementById('reg-password').value === document.getElementById('reg-confirm').value;
+      document.getElementById('pw-error').style.display = ok ? 'none' : 'block';
+      return ok;
+    }
+    switchView('{{ mode }}');
+  </script>
+</body>
+</html>
+

@@ -2,7 +2,7 @@ import sqlite3
 import pandas as pd
 
 # Database and table details
-database_name = "face_reg.db"  # Replace with your database file name
+database_name = "instance/face_reg.db"  # Replace with your database file name
 excel_file_name = "exported_timeline_monthly.xlsx"  # Output Excel file name
 
 # Connect to the SQLite database

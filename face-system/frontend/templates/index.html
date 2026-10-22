@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8">
+    <title>Quản lý điểm danh VKIST</title>
+    <link rel="icon" type="image/icon" href="static/img/icon.png">
+    <link rel="stylesheet" href="static/css/style.css">
+    <script src="/static/js/moment.min.js"></script>
+    <style>
+      /* CSS làm đẹp cho Modal (Cửa sổ nổi) Đăng ký */
+      #register-modal {
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        background: rgba(0, 0, 0, 0.7); z-index: 9999;
+        display: flex; justify-content: center; align-items: center;
+      }
+      .modal-content {
+        background: white; padding: 25px; border-radius: 12px;
+        width: 100%; max-width: 450px; text-align: center;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      }
+      .modal-content input, .modal-content select, .modal-content textarea {
+        width: 100%; padding: 10px; margin-bottom: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;
+      }
+      .modal-content button {
+        padding: 10px 15px; margin: 5px; border: none; border-radius: 6px;
+        background: #007bff; color: white; cursor: pointer; font-weight: bold;
+      }
+      .modal-content button.btn-cancel { background: #dc3545; }
+      #register-access-key { font-family: monospace; background: #eee; padding: 10px; font-size: 16px; margin: 15px 0; border-radius: 6px; word-break: break-all;}
+      .btn-register-main { position: fixed; bottom: 20px; right: 20px; z-index: 1000; padding: 12px 24px; font-size: 16px; background: #28a745; color: white; border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+    </style>
+  </head>
+  <body>
+    
+    <!-- Nút mở form đăng ký ở góc phải dưới -->
+    <button id="register-btn" class="btn-register-main" onclick="openRegister()">+ Thêm Khuôn Mặt Mới</button>
+
+    <div class="container">
+      <div class="container1">
+        {% for i in range(stream_count) %}
+        <img class="video" src="{{ url_for('video_feed', stream_id=i) }}">
+        {% endfor %}
+      </div>
+      <div class="container2">
+        <div class="data" style="font-weight: bold; border-bottom: 2px solid #ccc; padding-bottom: 10px;">
+          <div class="tab-name text-center" style="width: 33%">Ảnh tức thời</div>
+          <div class="tab-name text-center" style="width: 33%">Thông tin</div>
+          <div class="tab-name text-center" style="width: 33%">Ảnh hồ sơ</div>
+        </div>
+      </div>
+      <div class="container3">
+        <!-- Dữ liệu điểm danh hiển thị ở đây -->
+      </div>
+    </div>
+
+    <!-- CỬA SỔ ĐĂNG KÝ -->
+    <div id="register-modal" style="display:none;">
+      <div class="modal-content">
+        
+        <!-- BƯỚC 1: NHẬP THÔNG TIN -->
+        <div id="register-step-1">
+          <h2>Thông tin người mới</h2>
+          <input id="register-name" type="text" placeholder="Họ và tên">
+          <input id="register-age" type="number" placeholder="Tuổi">
+          <select id="register-gender">
+            <option value="">Chọn giới tính</option>
+            <option value="Nam">Nam</option>
+            <option value="Nữ">Nữ</option>
+          </select>
+          <select id="register-role">
+            <option value="">Chọn vai trò</option>
+            <option value="Student">Sinh viên</option>
+            <option value="Teacher">Giảng viên</option>
+            <option value="Staff">Nhân viên</option>
+          </select>
+          <input id="register-phone" type="text" placeholder="Số điện thoại">
+          <textarea id="register-description" placeholder="Mô tả / Ghi chú"></textarea>
+          
+          <button onclick="nextRegisterStep()">Tiếp tục chụp ảnh</button>
+          <button class="btn-cancel" onclick="closeRegister()">Hủy</button>
+        </div>
+
+        <!-- BƯỚC 2: LẤY KHUÔN MẶT -->
+        <div id="register-step-2" style="display:none;">
+          <h2>Nhìn thẳng vào Camera</h2>
+          <img id="register-camera" src="{{ url_for('video_feed', stream_id=0) }}" style="width:100%; border-radius: 8px; margin-bottom: 10px;">
+          <canvas id="register-canvas" style="display:none;"></canvas>
+          <img id="register-preview" style="display:none; width:100%; border-radius: 8px; margin-bottom: 10px;">
+          
+          <button id="btn-capture" onclick="captureFace()">📸 Chụp ảnh</button>
+          <button id="register-submit" onclick="submitRegistration()" style="display:none; background: #28a745;">🚀 Xác nhận Đăng ký</button>
+          <button class="btn-cancel" onclick="showRegisterStep(1)">Quay lại</button>
+        </div>
+
+        <!-- BƯỚC 3: THÀNH CÔNG -->
+        <div id="register-step-3" style="display:none;">
+          <h2 style="color: #28a745;">Đăng ký thành công!</h2>
+          <p>Mã định danh (Access Key) của người này:</p>
+          <div id="register-access-key"></div>
+          <button onclick="copyAccessKey()">Sao chép mã</button>
+          <button class="btn-cancel" onclick="closeRegister()">Đóng cửa sổ</button>
+        </div>
+
+      </div>
+    </div>
+
+    <script>
+      // Gửi về chính frontend (route /facereg), frontend chuyển tiếp sang backend.
+      // Nhờ vậy máy khác truy cập qua IP vẫn đăng ký được.
+      const BACKEND_URL = "";
+      let capturedFace = null;
+
+      // =============================== QUẢN LÝ MODAL ===============================
+      function openRegister() {
+          document.getElementById("register-modal").style.display = "flex";
+          showRegisterStep(1);
+      }
+
+      function closeRegister() {
+          document.getElementById("register-modal").style.display = "none";
+          capturedFace = null;
+          document.getElementById("register-preview").style.display = "none";
+          document.getElementById("register-camera").style.display = "block";
+          document.getElementById("register-submit").style.display = "none";
+          document.getElementById("btn-capture").style.display = "inline-block";
+      }
+
+      function showRegisterStep(step) {
+          document.getElementById("register-step-1").style.display = "none";
+          document.getElementById("register-step-2").style.display = "none";
+          document.getElementById("register-step-3").style.display = "none";
+          document.getElementById("register-step-" + step).style.display = "block";
+      }
+
+      function nextRegisterStep() {
+          const name = document.getElementById("register-name").value.trim();
+          const role = document.getElementById("register-role").value;
+          if (!name) return alert("Vui lòng nhập họ và tên");
+          if (!role) return alert("Vui lòng chọn vai trò");
+          showRegisterStep(2);
+      }
+
+      // =============================== CHỤP ẢNH ===============================
+      function captureFace() {
+          const camera = document.getElementById("register-camera");
+          const canvas = document.getElementById("register-canvas");
+          canvas.width = camera.naturalWidth || camera.width;
+          canvas.height = camera.naturalHeight || camera.height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(camera, 0, 0, canvas.width, canvas.height);
+          
+          capturedFace = canvas.toDataURL("image/jpeg", 0.9);
+          document.getElementById("register-preview").src = capturedFace;
+          
+          // Ẩn camera stream, hiện ảnh chụp tĩnh
+          camera.style.display = "none";
+          document.getElementById("register-preview").style.display = "block";
+          document.getElementById("btn-capture").style.display = "none";
+          document.getElementById("register-submit").style.display = "inline-block";
+      }
+
+      // =============================== GỬI ĐĂNG KÝ VỀ BACKEND ===============================
+      async function submitRegistration() {
+          if (!capturedFace) return alert("Vui lòng chụp ảnh khuôn mặt");
+
+          const data = {
+              secret_key: "{{ secret_key }}", // Lấy từ app.py truyền qua
+              name: document.getElementById("register-name").value.trim(),
+              age: parseInt(document.getElementById("register-age").value) || 0,
+              gender: document.getElementById("register-gender").value,
+              type_role: document.getElementById("register-role").value,
+              phone: document.getElementById("register-phone").value.trim(),
+              description: document.getElementById("register-description").value.trim(),
+              img: [ capturedFace ]
+          };
+
+          try {
+              // Gọi route /facereg của frontend (proxy sang backend)
+              const response = await fetch(`${BACKEND_URL}/facereg`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(data)
+              });
+
+              const result = await response.json();
+              if (!response.ok) throw new Error(result.result?.message || "Đăng ký thất bại");
+
+              document.getElementById("register-access-key").innerText = result.result.access_key;
+              showRegisterStep(3);
+
+          } catch (error) {
+              console.error(error);
+              alert("Lỗi kết nối Backend: " + error.message);
+          }
+      }
+
+      function copyAccessKey() {
+          const key = document.getElementById("register-access-key").innerText;
+          navigator.clipboard.writeText(key);
+          alert("Đã sao chép Access Key");
+      }
+
+      // =============================== CẬP NHẬT KẾT QUẢ TỪ CAMERA ===============================
+      var person_I = (id, student_name, image_base64_0, image_base64_1, timestamp, description) => `
+        <div class="data" style="border-bottom: 1px solid #eee; padding: 10px 0;">
+          <div class="column" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <div class="sub_column text-center" style="width: 33%">
+              <img style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px;" src="${image_base64_0}">
+              <div style="font-size: 12px; margin-top: 5px; color: #555;">${moment(timestamp, "x").format("HH:mm:ss DD/MM")}</div>
+            </div>
+            <div class="sub_column text-center" style="width: 33%">
+              <h4 style="margin: 0; color: #007bff;">${student_name}</h4>
+              <div style="font-style:italic; font-size: 13px; color: #666; margin-top: 5px;">${description || "Không có ghi chú"}</div>
+            </div>
+            <div class="sub_column text-center" style="width: 33%">
+              <img style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px; border: 2px solid #28a745;" src="${image_base64_1}">
+            </div>
+          </div>
+        </div>
+      `;
+
+      function refreshFileList() {
+        fetch('/data')
+          .then(response => response.json())
+          .then(data => {
+            const result_block = document.getElementsByClassName("container3")[0];
+            result_block.innerHTML = "";
+            for (const person of data.info) {
+              result_block.innerHTML += person_I(person[0], person[1], person[2], person[3], person[4], person[5]);
+            }
+          })
+          .catch(err => console.log("Chưa có dữ liệu khuôn mặt: ", err));
+      }
+      
+      refreshFileList();
+      setInterval(refreshFileList, 2000); // Tự động load mới mỗi 2 giây
+    </script>
+  </body>
+</html>

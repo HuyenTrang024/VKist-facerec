@@ -1,0 +1,40 @@
+services:
+  backend:
+    build: ./backend
+    container_name: attendance-backend
+    ports:
+      - "5002:5002"
+    volumes:
+      - ./data/instance:/app/instance   # database SQLite (face_reg.db)
+      - ./data/indexes:/app/indexes
+      - ./data/images:/app/images
+      - model_cache:/root/.cache        # model tải tự động + nvdiffrast đã biên dịch
+    # Deep3D (nvdiffrast) cần GPU NVIDIA + NVIDIA Container Toolkit
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: attendance-frontend
+    ports:
+      - "5000:5000"
+    environment:
+      - BACKEND_URL=http://backend:5002/
+      - SECRET_KEY=${SECRET_KEY}
+      - RTSP_URLS=${RTSP_URLS}
+      - REQUEST_INTERVAL=${REQUEST_INTERVAL:-15}
+    depends_on:
+      - backend
+    restart: unless-stopped
+    # Chỉ dùng khi chạy trên Linux và muốn dùng webcam gắn vào máy:
+    # devices:
+    #   - /dev/video0:/dev/video0
+
+volumes:
+  model_cache:

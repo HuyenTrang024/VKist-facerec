@@ -4,11 +4,15 @@ import binascii
 
 import uuid
 
-from sqlalchemy import create_engine, Column, Integer, String, Float, Text, LargeBinary, Boolean
+from sqlalchemy import (create_engine, Column, Integer, String, Float, Text,
+                        LargeBinary, Boolean, inspect, text)
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
-DATABASE_URI = 'sqlite:///./face_reg.db'
+
+# Đặt database trong instance/ để được mount ra ngoài container (data/instance)
+os.makedirs('instance', exist_ok=True)
+DATABASE_URI = 'sqlite:///./instance/face_reg.db'
 
 engine = create_engine(DATABASE_URI)
 db_session = scoped_session(sessionmaker(autocommit=False,
@@ -16,6 +20,7 @@ db_session = scoped_session(sessionmaker(autocommit=False,
                                          bind=engine))
 Base = declarative_base()
 Base.query = db_session.query_property()
+
 
 def hash_pass(password):
     """Hash a password for storing."""
@@ -51,6 +56,7 @@ class Users(Base):
     role = Column(String(64))
     secret_key = Column(String(64), unique=True)
     access_key = Column(String(64), unique=True)
+    full_name = Column(String(128))          # <-- MỚI: họ và tên
 
     def __init__(self, **kwargs):
         for property, value in kwargs.items():
@@ -58,7 +64,6 @@ class Users(Base):
             # unpack it's value (when **kwargs is request.form, some values
             # will be a 1-element list)
             if hasattr(value, '__iter__') and not isinstance(value, str):
-                # the ,= unpack of a singleton fails PEP8 (travis flake8 test)
                 value = value[0]
 
             if property == 'password':
@@ -70,6 +75,7 @@ class Users(Base):
 
     def __repr__(self):
         return str(self.username)
+
 
 class People(Base):
 
@@ -87,7 +93,8 @@ class People(Base):
 
     def __repr__(self):
         return str(self.id)
-    
+
+
 class ChildrenPicker(Base):
 
     __tablename__ = 'ChildrenParent'
@@ -98,9 +105,10 @@ class ChildrenPicker(Base):
 
     def __repr__(self):
         return str(self.id)
-    
+
+
 class PeopleClasses(Base):
-    
+
     __tablename__ = 'PeopleClasses'
     id = Column(Integer, primary_key=True)
     person_access_key = Column(String(64), unique=True)
@@ -108,9 +116,10 @@ class PeopleClasses(Base):
 
     def __repr__(self):
         return str(self.id)
-    
+
+
 class Classes(Base):
-    
+
     __tablename__ = 'Classes'
 
     id = Column(Integer, primary_key=True)
@@ -120,6 +129,7 @@ class Classes(Base):
 
     def __repr__(self):
         return str(self.id)
+
 
 class DefineImages(Base):
 
@@ -148,9 +158,10 @@ class Timeline(Base):
 
     def __repr__(self):
         return str(self.id)
-    
+
+
 class PickUp(Base):
-    
+
     __tablename__ = 'PickUp'
 
     id = Column(Integer, primary_key=True)
@@ -163,6 +174,21 @@ class PickUp(Base):
         return str(self.id)
 
 
+# ── Tự động thêm cột full_name cho database cũ ────────────────────────────────
+def migrate_add_full_name():
+    """create_all() không thêm cột vào bảng đã tồn tại, nên tự ALTER ở đây."""
+    insp = inspect(engine)
+    if 'Users' in insp.get_table_names():
+        columns = [c['name'] for c in insp.get_columns('Users')]
+        if 'full_name' not in columns:
+            with engine.begin() as conn:
+                conn.execute(text('ALTER TABLE "Users" ADD COLUMN full_name VARCHAR(128)'))
+            print('Đã thêm cột full_name vào bảng Users')
+
+
+migrate_add_full_name()
+
+
 index_dir_path = 'indexes/'
 image_dir_path = 'images/'
 instance_dir_path = 'instance/'
@@ -172,3 +198,4 @@ if not os.path.exists(image_dir_path):
     os.makedirs(image_dir_path)
 if not os.path.exists(instance_dir_path):
     os.makedirs(instance_dir_path)
+

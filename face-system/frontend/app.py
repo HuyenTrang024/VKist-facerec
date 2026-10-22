@@ -2,7 +2,7 @@ import os
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'   # suppress oneDNN numerical warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'    # suppress TF C++ INFO/WARNING logs
 
-from flask import Flask, render_template, Response, jsonify
+from flask import Flask, render_template, Response, jsonify, request
 import cv2
 import requests
 import base64
@@ -21,25 +21,21 @@ app = Flask(__name__)
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 # Backend URL — change to domain name if not running locally
-BACKEND_URL = 'http://localhost:5002/'
+# ── Configuration (đọc từ biến môi trường) ────────────────────────────────────
 
-# Account secret key from the backend (id: abc / password: 123)
-SECRET_KEY = "281f8065-1719-4670-8f39-ef7686c03902"
+BACKEND_URL = os.environ.get('BACKEND_URL', 'http://localhost:5002/')
+if not BACKEND_URL.endswith('/'):
+    BACKEND_URL += '/'
 
-# Send a recognition request every N frames
-REQUEST_INTERVAL = 15
+SECRET_KEY = os.environ.get('SECRET_KEY', '')
 
-# Pixels to extend around detected face crop before sending to backend
-EXTEND_PIXEL = 50
+REQUEST_INTERVAL = int(os.environ.get('REQUEST_INTERVAL', 15))
+EXTEND_PIXEL = int(os.environ.get('EXTEND_PIXEL', 50))
+MAX_QUEUE = int(os.environ.get('MAX_QUEUE', 3))
 
-# Max concurrent recognition threads per stream
-MAX_QUEUE = 3
+# Nhiều URL RTSP, cách nhau bằng dấu phẩy
+RTSP_URLS = [u.strip() for u in os.environ.get('RTSP_URLS', '').split(',') if u.strip()]
 
-# RTSP stream URLs — add as many as needed, leave empty to use webcams only
-RTSP_URLS = [
-    # 'rtsp://admin:@Vkist308@10.3.8.118/media/video1',
-    # 'rtsp://admin:@Vkist308@10.3.8.126/media/video1',
-]
 
 # ── Model initialization ───────────────────────────────────────────────────────
 
@@ -221,8 +217,11 @@ print(f'Active streams: {STREAM_SOURCES}')
 
 @app.route('/')
 def index():
-    return render_template('index.html', stream_count=len(STREAM_SOURCES))
-
+    return render_template(
+        'index.html',
+        stream_count=len(STREAM_SOURCES),
+        secret_key=SECRET_KEY
+    )
 
 @app.route('/video_feed/<int:stream_id>')
 def video_feed(stream_id):
@@ -235,6 +234,26 @@ def video_feed(stream_id):
     )
 
 
+@app.route('/facereg', methods=['POST'])
+def facereg():
+    """Chuyển tiếp yêu cầu đăng ký khuôn mặt sang backend.
+
+    Trình duyệt ở máy khác không gọi được http://localhost:5002 (và bị chặn CORS),
+    nên trang frontend gửi về chính frontend, frontend gửi tiếp sang backend.
+    """
+    try:
+        response = requests.post(
+            BACKEND_URL + 'facereg',
+            data=request.get_data(),
+            headers={'Content-Type': 'application/json'},
+            timeout=100
+        )
+    except requests.RequestException as e:
+        return jsonify({'result': {'message': f'Không kết nối được backend: {e}'}}), 502
+    return Response(response.content, status=response.status_code,
+                    content_type=response.headers.get('Content-Type', 'application/json'))
+
+
 @app.route('/data')
 def data():
     """Return the latest recognition results (last 3 entries)."""
@@ -244,4 +263,5 @@ def data():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+
